@@ -54,8 +54,14 @@ dev = [
 ]
 
 [project.scripts]
-generate_template = "snakecdysis.scripts.generate_template:main"
+bam_to_gVCF = "Haplocharmer.scripts.BAM_to_gVCF:main"
+vcf_filter = "Haplocharmer.scripts.VCF_filter:main"
+HaploCharmer = "Haplocharmer.main:main"
 
 [project.entry-points.Haplocharmer]
 Haplocharmer = "__init__"
 
+[tool.sphinx]
+source-dir = "docs/source"
+build-dir = "docs/build"
+config-dir = "docs/source"

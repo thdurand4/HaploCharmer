@@ -2,9 +2,12 @@ import os
 from pathlib import *
 from collections import defaultdict
 import pandas as pd
+import Haplocharmer
+from haploCharmer.module import HaploCharmer
 
-
-configfile: "config/config.yaml"
+haplo_obj = HaploCharmer(Haplocharmer.dico_tool, workflow=workflow, config=config)
+tools_config = haplo_obj.tools_config
+cluster_config = haplo_obj.cluster_config
 
 
 reference = config["DATA"]["REFERENCE"]
@@ -106,9 +109,9 @@ rule indexation :
 
             """
     envmodules:
-        "picard-tools/2.24.0-conda",
-        "samtools/1.2-bin",
-        "bwa/0.7.17"
+        tools_config["ENVMODULE"]["PICARD"],
+        tools_config["ENVMODULE"]["SAMTOOLS"],
+        tools_config["ENVMODULE"]["BWA"]
     shell:
         """
         (cp {input.reference_fasta} {params.new_ref}
@@ -154,8 +157,8 @@ rule alignment:
                        samtools sort -@ {{threads}} -o {{output.bam_file}}) 
             """
     envmodules:
-        "bwa/0.7.17",
-        "samtools/1.14-bin"
+        tools_config["ENVMODULE"]["SAMTOOLS"],
+        tools_config["ENVMODULE"]["BWA"]
     shell:
         """
         (bwa mem -t {threads} -M {params.REF} -R '@RG\\tSM:{params.SM}\\tLB:{params.LB}\\tID:{params.ID}\\tPU:{params.PU}\\tPL:{params.PLATEFORM}' {input.fastq} |
@@ -189,7 +192,7 @@ rule samtools_index:
                     - samtools index -@ {{threads}} {{input.bam}} 1>{{log.output}} 2>{{log.error}}
             """
     envmodules:
-        "samtools/1.14-bin"
+        tools_config["ENVMODULE"]["SAMTOOLS"]
     shell:
             """
                 samtools index -@ {threads} {input.bam} 1>{log.output} 2>{log.error}
@@ -224,7 +227,7 @@ rule samstats:
                     - samtools stats {{input.bam_file}} > {{output.stats_file}}                 
             """
     envmodules:
-        "samtools/1.14-bin"
+        tools_config["ENVMODULE"]["SAMTOOLS"]
     shell:
         f"samtools stats {{input.bam_file}} > {{log.output}} 1>{{output.stats_file}} 2>{{log.error}}"
 
@@ -261,7 +264,7 @@ rule remove_duplicates:
                 - picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        "picard-tools/2.24.0"
+        tools_config["ENVMODULE"]["PICARD"]
     shell:
         f"picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}"
 
@@ -276,7 +279,8 @@ rule gatk_interval:
     params:
         SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
         ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
-        ref= rules.alignment.params.REF
+        ref= rules.alignment.params.REF,
+        gatk = tools_config["DOWNLOAD_PATH"]["GATK_3_6"]
     log:
         error = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.e',
         output = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.o'
@@ -296,9 +300,9 @@ rule gatk_interval:
                 - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        "jre/jre.8_x64"
+        tools_config["ENVMODULE"]["JAVA"]
     shell:
-        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}"
+        f"java -jar -Xmx30G {{params.gatk}} -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}"
 
 
 rule gatk_alignment:
@@ -312,7 +316,8 @@ rule gatk_alignment:
     params:
         SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
         ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
-        ref= rules.alignment.params.REF
+        ref= rules.alignment.params.REF,
+        gatk= tools_config["DOWNLOAD_PATH"]["GATK_3_6"]
     log:
         error = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.e',
         output = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.o'
@@ -333,9 +338,9 @@ rule gatk_alignment:
                 - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        "jre/jre.8_x64"
+        tools_config["ENVMODULE"]["JAVA"]
     shell:
-        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}"
+        f"java -jar -Xmx30G {{params.gatk}} -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}"
 
 rule gvcf:
     threads: get_threads("gvcf",1)
@@ -371,7 +376,7 @@ rule gvcf:
                 - echo {{output.gvcf}} >> {{params.list_gvcf}}
         """
     envmodules:
-        "python/3.8.2"
+        tools_config["ENVMODULE"]["PYTHON"]
     shell:
         """
         (python3 {params.path_to_script}BAM_to_gVCF.py -bam {input.bam_file} -bed {input.bed} -o {output.gvcf} {params.params_scripts}
@@ -433,7 +438,7 @@ rule merge_gvcf:
                 - bcftools index {{output.merge_gvcf}}
         """
     envmodules:
-        "bcftools/1.17"
+        tools_config["ENVMODULE"]["BCFTOOLS"]
     shell:
         f"""
         bcftools merge --no-index -m all -O z --gvcf {{params.ref}} -l {{input.list_gVCF}} -o {{output.merge_gvcf}}  1>{{log.output}} 2>{{log.error}}
@@ -450,7 +455,7 @@ checkpoint split_by_chr:
     output:
         path_chr = directory(f"{results}6_SPLIT_BY_CHR/")
     envmodules:
-        "bcftools/1.17"
+        tools_config["ENVMODULE"]["BCFTOOLS"]
     shell:
         """
         mkdir -p {output.path_chr}
@@ -496,7 +501,7 @@ rule vcf_filter:
                 
         """
     envmodules:
-        "python/3.8.2"
+        tools_config["ENVMODULE"]["PYTHON"]
     shell:
         f"python3 {{params.path_to_script}}VCF_filter.py -i {{input.split_chr}} -o {{output.gvcf_filter}} {{params.params_vcf_filter}} 1> {{log.output}} 2> {{log.error}}"
 
@@ -534,7 +539,7 @@ rule hap_pres_abs:
 
         """
     envmodules:
-        "python/3.8.2"
+        tools_config["ENVMODULE"]["PYTHON"]
     shell:
         f"python3 {{params.path_to_script}}VCF_to_HapPresAbs.py -i {{input.filtered_vcf}} -o {{params.prefix}} --reference {{params.ref}} -v {{params.info}} {{params.params_hap_pres_abs}}  1>{{log.output}} 2>{{log.error}}"
 

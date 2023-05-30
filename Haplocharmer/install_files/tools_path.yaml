@@ -7,11 +7,19 @@ SINGULARITY:
     REPORT : 'INSTALL_PATH/containers/Singularity.report.sif'
     TOOLS : 'INSTALL_PATH/containers/Singularity.tools.sif'
 
-# Is and exemple of tools path
+# Give envmodules of these tools : (Tools which are loaded with the command : "module load bwa/0.7.17" on cluster with slurm scheduler)
 ENVMODULE:
-    R : "r"
-    QUAST : "quast"
-    MAUVE : "mauve"
-    SHASTA : "shasta"
-    ASSEMBLYTICS : "assemblytics"
+    PICARD : "picard-tools/2.24.0"
+    SAMTOOLS : "samtools/1.14-bin"
+    BWA : "bwa/0.7.17"
+    JAVA : "jre/jre.8_x64"
+    PYTHON : "python/3.8.2"
+    BCFTOOLS : "bcftools/1.17"
+    
+
+
+# Give Path of GATK 3.6 INSTALL REQUIRED !!!!
+DOWNLOAD_PATH:
+    GATK_3_6 : "/nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar"
+    
 

@@ -9,7 +9,7 @@ from .global_variables import *
 from snakecdysis import *
 
 
-class Haplocharmer(SnakEcdysis):
+class HaploCharmer(SnakEcdysis):
     """
     to read file config
     """
