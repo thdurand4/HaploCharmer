@@ -3,7 +3,7 @@ from pathlib import *
 from collections import defaultdict
 import pandas as pd
 import Haplocharmer
-from haploCharmer.module import HaploCharmer
+from Haplocharmer.module import HaploCharmer
 
 haplo_obj = HaploCharmer(Haplocharmer.dico_tool, workflow=workflow, config=config)
 tools_config = haplo_obj.tools_config
