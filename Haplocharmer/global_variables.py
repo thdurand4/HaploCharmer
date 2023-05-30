@@ -1,7 +1,7 @@
 from pathlib import Path
 
 DOCS = "https://Haplocharmer.readthedocs.io/en/latest/"
-GIT_URL = "https://github.com/SouthGreenPlatform/Haplocharmer"
+GIT_URL = "https://github.com/thdurand4/HaploCharmer"
 
 INSTALL_PATH = Path(__file__).resolve().parent
 SINGULARITY_URL_FILES = [('https://itrop.ird.fr/culebront_utilities/singularity_build/Singularity.culebront_tools.sif',

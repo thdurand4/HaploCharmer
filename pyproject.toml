@@ -15,9 +15,9 @@ local_scheme = "no-local-version"
 [project]
 name = "Haplocharmer"
 dynamic = ["version"]
-description = "TODO !!!!!"
+description = "HaploCharmer is a Snakemake pipeline for small haplotypes calling from short read sequencing data"
 authors = [
-    {name = "Ravel Sebastien (CIRAD)",email = "sebastien.ravel@cirad.fr"},
+    {name = "Durand Théo (CIRAD)",email = "theo.durand@cirad.fr"},
 ]
 dependencies = ["PyYAML", "click>=8.0.3", "cookiecutter", "docutils", "python-gitlab", "snakemake", "tqdm"]
 requires-python = ">=3.8"
@@ -40,11 +40,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://forge.ird.fr/phim/sravel/snakecdysis"
-Downloads = "https://forge.ird.fr/phim/sravel/snakecdysis/archive/"
-"Bug Tracker" = "https://forge.ird.fr/phim/sravel/snakecdysis/issues"
-Documentation = "https://snakecdysis.readthedocs.io/en/latest/"
-"Source Code" = "https://forge.ird.fr/phim/sravel/snakecdysis"
+Homepage = "https://github.com/thdurand4/HaploCharmer"
+"Bug Tracker" = "https://github.com/thdurand4/HaploCharmer/issues"
+Documentation = "https://Haplocharmer.readthedocs.io/en/latest/"
+"Source Code" = "https://github.com/thdurand4/HaploCharmer"
 
 [project.optional-dependencies]
 dev = [
