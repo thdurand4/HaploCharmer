@@ -1,0 +1,7 @@
+__default__:
+    cpus-per-task: 1
+    mem-per-cpu: 10G
+    partition: PARTITION
+    output: '{log.output}_cluster'
+    error: '{log.error}_cluster'
+    job-name: '{rule}.{wildcards}'

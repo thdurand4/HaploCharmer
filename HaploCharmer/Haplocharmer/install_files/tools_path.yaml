@@ -1,0 +1,17 @@
+## BUILD SINGULARITY IMAGES PATH
+## PLEASE FILL IN SINGULARITY IMAGES PATH IF YOU HAVE CHOSEN INSTALL WITH ENV MODE SINGULARITY (option --env singularity)
+## PLEASE FILL IN "ENVMODULES" SECTION IF YOU HAVE CHOSEN INSTALL WITH ENV MODE MODULES (option --env modules)
+## WARNING!!! DO NOT ERASE LINES OR COMMENT THEM !  è_é
+
+SINGULARITY:
+    REPORT : 'INSTALL_PATH/containers/Singularity.report.sif'
+    TOOLS : 'INSTALL_PATH/containers/Singularity.tools.sif'
+
+# Is and exemple of tools path
+ENVMODULE:
+    R : "r"
+    QUAST : "quast"
+    MAUVE : "mauve"
+    SHASTA : "shasta"
+    ASSEMBLYTICS : "assemblytics"
+

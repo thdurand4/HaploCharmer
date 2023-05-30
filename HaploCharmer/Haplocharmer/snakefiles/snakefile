@@ -1,0 +1,91 @@
+#!/usr/bin/env snakemake
+# -*- coding: utf-8 -*-
+
+from pathlib import Path
+from pprint import pprint as pp
+# load own functions
+import Haplocharmer
+
+
+Haplocharmer_obj = Haplocharmer(Haplocharmer.dico_tool, workflow=workflow, config=config)
+tools_config = Haplocharmer_obj.tools_config
+cluster_config = Haplocharmer_obj.cluster_config
+
+# print(Haplocharmer_obj.export_use_yaml)
+# print for debug:
+# pp(Haplocharmer_obj)
+# exit()
+# print(tools_config)
+# exit()
+
+###############################################################################
+# dir and suffix
+output_dir = config["DATA"]["OUTPUT"]
+log_dir = f"{output_dir}LOGS/"
+
+# Change workdir to output path (slurm logs append on outdir)
+workdir: output_dir
+
+
+
+#############################################
+# use threads define in cluster_config rule or rule default or default in snakefile
+#############################################
+def get_threads(rule, default):
+    """
+    give threads or 'cpus-per-task from cluster_config rule: threads to SGE and cpus-per-task to SLURM
+    """
+    if cluster_config:
+        if rule in cluster_config and 'threads' in cluster_config[rule]:
+            return int(cluster_config[rule]['threads'])
+        elif rule in cluster_config and 'cpus-per-task' in cluster_config[rule]:
+            return int(cluster_config[rule]['cpus-per-task'])
+        elif '__default__' in cluster_config and 'cpus-per-task' in cluster_config['__default__']:
+            return int(cluster_config['__default__']['cpus-per-task'])
+        elif '__default__' in cluster_config and 'threads' in cluster_config['__default__']:
+            return int(cluster_config['__default__']['threads'])
+    # if local
+    elif workflow.global_resources["_cores"]:
+        return workflow.global_resources["_cores"]
+    # if cluster not rule and not default or local not _cores return value from call
+    return default
+
+
+
+################################ ASSEMBLY ####################################
+include: f"{Haplocharmer_obj.install_path}/snakefiles/assemblers.snake"
+
+
+
+rule some_exemple:
+    threads: get_threads("some_exemple",1)
+    input:
+        toto=rules.start.output.machin,
+        truc=ref
+    output:
+        csv_var_per_contig=f"{output_dir}4_STRUCTURAL_VAR/csv_variants/{{samples}}_variants_per_contig.csv"
+    log:
+        error=f'{log_dir}some_exemple/{{samples}}.e',
+        output=f'{log_dir}some_exemple/{{samples}}.o'
+    message:
+        f"""
+        Running {{rule}}
+        Input:
+            - toto: {{input.toto}}
+        Output:
+            - csv_file: {{output.csv_var_per_contig}}
+        Others
+            - Threads: {{threads}}
+            - LOG error: {{log.error}}
+            - LOG output: {{log.output}}
+        """
+    singularity:
+        tools_config['SINGULARITY']['TOOLS']
+    envmodules:
+        tools_config["MODULES"]["MINIMAP2"],
+        tools_config["MODULES"]["SAMTOOLS"]
+    shell:
+         f"(python {Haplocharmer_obj.snakemake_scripts}/vcf_contigs.py -v {{input.vcf_file}} -r {{input.ref_fasta}} -o {{output.csv_var_per_contig}}) 1>{{log.output}} 2>{{log.error}}"
+
+
+

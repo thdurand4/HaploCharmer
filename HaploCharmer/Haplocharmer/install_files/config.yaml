@@ -1,0 +1,5 @@
+### WORKFLOW CONFIG EXEMPLE
+# DATA_DIR is replace by the test_install function
+# to add path of datatest downloaded
+DATA:
+  FASTQ: "DATA_DIR/fastq"
