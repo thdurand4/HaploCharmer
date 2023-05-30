@@ -23,7 +23,7 @@ dependencies = ["PyYAML", "click>=8.0.3", "cookiecutter", "docutils", "python-gi
 requires-python = ">=3.8"
 readme = "README.rst"
 license = {file = "LICENSE"}
-keywords = ["snakemake", "wrapper", "installation"]
+keywords = ["snakemake", "haplotypes", "workflow"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
