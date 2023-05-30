@@ -1,0 +1,50 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+#IDE
+.idea
+.project
+.pydevproject
+.settings/
+venv
+
+# Unit test
+.pytest_cache/
+
+# Sphinx documentation
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# snakemake
+.snakemake
+
+# for dev
+Haplocharmer/_version.py
+Haplocharmer/.mode.txt
+Haplocharmer/default_profile
+Haplocharmer/containers/Singularity.rattleSNP_tools.sif
+Haplocharmer/containers/Singularity.report.sif
+data_test_mapping
+*.pdf
+*.dot
+.tox
