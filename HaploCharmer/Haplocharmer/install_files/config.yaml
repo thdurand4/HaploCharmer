@@ -1,5 +1,15 @@
-### WORKFLOW CONFIG EXEMPLE
-# DATA_DIR is replace by the test_install function
-# to add path of datatest downloaded
 DATA:
-  FASTQ: "DATA_DIR/fastq"
+    REFERENCE: "/home/rios/scratch/Genotyping/Reference/Monoploid_JGI.fa"
+    OUTPUT: "/home/durandt/scratch/HAPLOTYPING/WORKFLOW_HAPLOTYPING/RESULT_RUN_1_408_ACC/"
+    SCRIPTS: "/home/durandt/scratch/HAPLOTYPING/WORKFLOW_HAPLOTYPING/scripts/"
+    BEDFILE: "/home/rios/scratch/Haplotyping/Data/Target_regions_31408.bed"
+    INFORMATION_FILE: "/home/durandt/scratch/HAPLOTYPING/WORKFLOW_HAPLOTYPING/all_fastq_list.txt"
+
+TOOLS_PARAMS:
+    SAMTOOLS_VIEW: "-bS -uF 4 -uF 256"
+    BAM_TO_GVCF: '-q 1 -n "." --report_all_positions --compress'
+    VCF_FILTER: "--min_gt_depth 10 --max_gt_depth 1000 --min_hap_depth 3 --min_hap_freq 0.04 --compress"
+    HAP_PRES_ABS: "--max_abs_freq 0.01 --min_pres_depth 3 --min_pres_freq 0.04 --compress"
+
+OPTIONAL:
+    REMOVE_DUPLICATES: False

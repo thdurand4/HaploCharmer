@@ -1,0 +1,578 @@
+import os
+from pathlib import *
+from collections import defaultdict
+import pandas as pd
+
+
+configfile: "config/config.yaml"
+
+
+reference = config["DATA"]["REFERENCE"]
+results = config["DATA"]["OUTPUT"]
+list_fastq = config["DATA"]["INFORMATION_FILE"]
+bedfile = config["DATA"]["BEDFILE"]
+
+all_files = []
+all_samples = {}
+all_reads = {}
+
+
+
+
+# Parsing data reads
+for IDX, line in enumerate(open(list_fastq,"r")):
+    if "R1" not in line:
+        NAME = line.strip().split()[4]
+        R1 = line.strip().split()[0]
+        R2 = line.strip().split()[1]
+        PLATEFORM = line.strip().split()[6]
+        SM = line.strip().split()[2]
+        LB = line.strip().split()[3]
+        PU = line.strip().split()[5]
+        if not PLATEFORM in ["ILLUMINA", "SOLID", "LS454", "HELICOS", "PACBIO"]:
+            raise Exception(PLATEFORM + " is not a valid sequencer type\n")
+
+        all_files.append(os.path.basename(R1).replace('.gz','').replace('.fastq',''))
+        prefix = os.path.basename(R1).replace('.fastq.gz','').replace('.fq.gz','').replace('_R1','').replace('.R1','').replace('.R','').replace('_P1','').replace('.P1','')
+        all_reads[prefix] = {"idx": IDX, "name": NAME, "reads": [R1], "plateform": PLATEFORM, "sm" : SM, "lb" : LB, "pu" : PU}
+
+        if not "None" in R2:
+            all_reads[prefix]["reads"].append(R2)
+            all_files.append(os.path.basename(R2).replace('.gz','').replace('.fastq',''))
+
+        all_samples.setdefault(NAME,[])
+        all_samples[NAME].append(os.path.basename(prefix))
+
+#print(all_reads)
+log_dir = f"{results}LOGS/"
+
+basename_reference = PurePosixPath(reference).stem
+name_reference = PurePosixPath(reference).name
+
+
+SM = {}
+ID = {}
+
+for k , v in all_reads.items():
+    SM[k] = all_reads[k]["sm"]
+    ID[k] = all_reads[k]["name"]
+
+
+BWA_INDEX = ['amb','ann','bwt','pac','sa']
+
+def get_threads(rule, default):
+    """
+    give threads or 'cpus-per-task from cluster_config rule : threads to SGE and cpus-per-task to SLURM
+    """
+    if rule in cluster_config and 'threads' in cluster_config[rule]:
+        return int(cluster_config[rule]['threads'])
+    elif '__default__' in cluster_config and 'threads' in cluster_config['__default__']:
+        return int(cluster_config['__default__']['threads'])
+    return default
+
+rule finale:
+    input:
+        report_finale = f"{results}report.html"
+
+
+rule indexation :
+    threads: get_threads("indexation",2)
+    input:
+        reference_fasta = reference
+    output:
+        dico_ref_picard = f"{results}1_INDEXATION/REFERENCE/{basename_reference}.dict",
+        index = expand(f"{results}1_INDEXATION/REFERENCE/{name_reference}.{{suffix}}", suffix = BWA_INDEX)
+    params:
+        new_ref = f"{results}1_INDEXATION/REFERENCE/"
+    log :
+        error =  f'{log_dir}indexation/indexation.e',
+        output = f'{log_dir}indexation/indexation.o'
+    message:
+            f"""
+             Running {{rule}}
+                Input:
+                    - Reference Fasta : {{input.reference_fasta}}
+                Output:
+                    - Dico Reference Picard: {{output.dico_ref_picard}}
+                Others:
+                    - Threads : {{threads}}
+                    - LOG error: {{log.error}}
+                    - LOG output: {{log.output}}
+                Commands:
+                    - cp {{input.reference_fasta}} {{params.new_ref}}
+                    - samtools faidx {{params.new_ref}}{{name_reference}}
+                    - bwa index {{params.new_ref}}{{name_reference}}
+                    - picard CreateSequenceDictionary --REFERENCE {{params.new_ref}}{{name_reference}} -O {{params.new_ref}}{{basename_reference}}.dict
+
+            """
+    envmodules:
+        "picard-tools/2.24.0-conda",
+        "samtools/1.2-bin",
+        "bwa/0.7.17"
+    shell:
+        """
+        (cp {input.reference_fasta} {params.new_ref}
+        samtools faidx {params.new_ref}{name_reference}
+        bwa index {params.new_ref}{name_reference}
+        picard CreateSequenceDictionary --REFERENCE {params.new_ref}{name_reference} -O {params.new_ref}{basename_reference}.dict ) 1>{log.output} 2>{log.error}
+        """
+
+rule alignment:
+    threads: get_threads("alignment",6)
+    input:
+        ref = rules.indexation.output.dico_ref_picard,
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"]
+    output:
+        bam_file = f"{results}2_ALIGNMENT/BAM/{{SM}}/{{prefix}}/{{ID}}.bam"
+    log :
+        error =  f'{log_dir}alignement/BAM/{{SM}}/{{prefix}}/{{ID}}.e',
+        output = f'{log_dir}alignement/BAM/{{SM}}/{{prefix}}/{{ID}}.o'
+    params:
+        SM=lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID=lambda wildcards: all_reads[wildcards.prefix]["name"],
+        PLATEFORM=lambda wildcards: all_reads[wildcards.prefix]["plateform"],
+        LB= lambda wildcards: all_reads[wildcards.prefix]["lb"],
+        PU= lambda wildcards: all_reads[wildcards.prefix]["pu"],
+        REF = rules.indexation.params.new_ref + name_reference,
+        smtools_view_params = config["TOOLS_PARAMS"]["SAMTOOLS_VIEW"]
+
+    message:
+            f"""
+             Running {{rule}}
+                Input:
+                    - Reference Fasta : {{input.ref}}
+                    - FASTQ : {{input.fastq}}
+                Output:
+                    - Bam File: {{output.bam_file}}
+                Others:
+                    - Threads : {{threads}}
+                    - LOG error: {{log.error}}
+                    - LOG output: {{log.output}}
+                Commands:
+                    - (bwa mem -t {{threads}} -M {{params.REF}} -R '@RG\\tSM:{{params.SM}}\\tLB:{{params.LB}}\\tID:{{params.ID}}\\tPU:{{params.PU}}\\tPL:{{params.PLATEFORM}}' {{input.fastq}} |
+                       samtools view -@ {{threads}} {{params.smtools_view_params}} |
+                       samtools sort -@ {{threads}} -o {{output.bam_file}}) 
+            """
+    envmodules:
+        "bwa/0.7.17",
+        "samtools/1.14-bin"
+    shell:
+        """
+        (bwa mem -t {threads} -M {params.REF} -R '@RG\\tSM:{params.SM}\\tLB:{params.LB}\\tID:{params.ID}\\tPU:{params.PU}\\tPL:{params.PLATEFORM}' {input.fastq} |
+        samtools view -@ {threads} {params.smtools_view_params} |
+        samtools sort -@ {threads} -o {output.bam_file} ) 1> {log.output} 2> {log.error}
+        """
+
+
+rule samtools_index:
+    """index bam for use stats"""
+    threads: get_threads('samtools_index', 1)
+    input:
+            bam = rules.alignment.output.bam_file
+    output:
+            bai = f"{results}2_ALIGNMENT/BAM/{{SM}}/{{prefix}}/{{ID}}.bam.bai"
+    log:
+            error =  f'{log_dir}samtools_index/{{SM}}/{{prefix}}/{{ID}}.e',
+            output = f'{log_dir}samtools_index/{{SM}}/{{prefix}}/{{ID}}.e'
+    message:
+            f"""
+            Running {{rule}}
+                Input:
+                    - Bam : {{input.bam}}
+                Output:
+                    - Bai : {{output.bai}}
+                Others:
+                    - Threads : {{threads}}
+                    - LOG error: {{log.error}}
+                    - LOG output: {{log.output}}
+                Command:
+                    - samtools index -@ {{threads}} {{input.bam}} 1>{{log.output}} 2>{{log.error}}
+            """
+    envmodules:
+        "samtools/1.14-bin"
+    shell:
+            """
+                samtools index -@ {threads} {input.bam} 1>{log.output} 2>{log.error}
+            """
+
+
+rule samstats:
+    threads: get_threads("samstats",1)
+    input:
+        bam_file = rules.alignment.output.bam_file,
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"]
+    output:
+        stats_file = f"{results}2_ALIGNMENT/STATS/{{SM}}/{{prefix}}/{{ID}}.sam.stat"
+    log:
+        error=f'{log_dir}alignement/stats/{{SM}}/{{prefix}}/{{ID}}.e',
+        output=f'{log_dir}alignement/stats/{{SM}}/{{prefix}}/{{ID}}.o'
+    params:
+        SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID= lambda wildcards: all_reads[wildcards.prefix]["name"]
+    message:
+            f"""
+             Running {{rule}}
+                Input:
+                    - Bam File : {{input.bam_file}}
+                Output:
+                    - Stats File: {{output.stats_file}}
+                Others:
+                    - Threads : {{threads}}
+                    - LOG error: {{log.error}}
+                    - LOG output: {{log.output}}
+                Commands:
+                    - samtools stats {{input.bam_file}} > {{output.stats_file}}                 
+            """
+    envmodules:
+        "samtools/1.14-bin"
+    shell:
+        f"samtools stats {{input.bam_file}} > {{log.output}} 1>{{output.stats_file}} 2>{{log.error}}"
+
+
+
+
+rule remove_duplicates:
+    threads: get_threads("remove_duplicates",1)
+    input:
+        bam_file = rules.alignment.output.bam_file if config["OPTIONAL"]["REMOVE_DUPLICATES"] else [],
+        bai = rules.samtools_index.output.bai if config["OPTIONAL"]["REMOVE_DUPLICATES"] else [],
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"] if config["OPTIONAL"]["REMOVE_DUPLICATES"] else []
+    output:
+        rmdup_bam = f"{results}2_BIS_REMOVE_DUPLICATES/{{SM}}/{{prefix}}/{{ID}}_rmdup.bam"
+    params:
+        SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
+        metrics = f"{results}2_BIS_REMOVE_DUPLICATES/{{SM}}/{{prefix}}/marked_dup_metrics.txt"
+    log:
+        error = f'{log_dir}remove_duplicates/{{SM}}/{{prefix}}/{{ID}}.e',
+        output = f'{log_dir}remove_duplicates/{{SM}}/{{prefix}}/{{ID}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Bam File : {{input.bam_file}}
+            Output:
+                - Rmdup Bam File: {{output.rmdup_bam}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}
+        """
+    envmodules:
+        "picard-tools/2.24.0"
+    shell:
+        f"picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}"
+
+rule gatk_interval:
+    threads: get_threads("gatk_interval",1)
+    input:
+        bam_file = rules.remove_duplicates.output.rmdup_bam if config["OPTIONAL"]["REMOVE_DUPLICATES"] else [rules.alignment.output.bam_file],
+        bai = rules.samtools_index.output.bai,
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"],
+    output:
+        align_interval = f"{results}3_REALIGNMENT/{{SM}}/{{prefix}}/{{ID}}_RTC_intervals.list"
+    params:
+        SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
+        ref= rules.alignment.params.REF
+    log:
+        error = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.e',
+        output = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Bam File or RMDUP Bam file : {{input.bam_file}}
+                - Reference : {{params.ref}}
+            Output:
+                - Liste d'intervalle pour réaligner : {{output.align_interval}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}
+        """
+    envmodules:
+        "jre/jre.8_x64"
+    shell:
+        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}"
+
+
+rule gatk_alignment:
+    threads: get_threads("gatk_alignment",1)
+    input:
+        bam_file = rules.remove_duplicates.output.rmdup_bam if config["OPTIONAL"]["REMOVE_DUPLICATES"] else [rules.alignment.output.bam_file],
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"],
+        interval_list = rules.gatk_interval.output.align_interval
+    output:
+        realigned_bam = f"{results}3_REALIGNMENT/{{SM}}/{{prefix}}/{{ID}}_rmdup_realigned.bam" if config["OPTIONAL"]["REMOVE_DUPLICATES"] else[f"{results}3_REALIGNMENT/{{SM}}/{{prefix}}/{{ID}}_realigned.bam"]
+    params:
+        SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
+        ref= rules.alignment.params.REF
+    log:
+        error = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.e',
+        output = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Bam File or RMDUP Bam file : {{input.bam_file}}
+                - Reference : {{params.ref}}
+                - Interval list : {{input.interval_list}}
+            Output:
+                - Bam re-aligned : {{output.realigned_bam}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}
+        """
+    envmodules:
+        "jre/jre.8_x64"
+    shell:
+        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}"
+
+rule gvcf:
+    threads: get_threads("gvcf",1)
+    input:
+        bam_file = rules.gatk_alignment.output.realigned_bam,
+        fastq = lambda wildcards: all_reads[wildcards.prefix]["reads"],
+        bed = bedfile
+    output:
+        gvcf = f"{results}4_gVCF/{{ID}}/{{prefix}}/{{SM}}.g.vcf.gz"
+    params:
+        SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
+        ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
+        params_scripts = config["TOOLS_PARAMS"]["BAM_TO_GVCF"],
+        list_gvcf = f"{results}4_gVCF/list.txt",
+        path_to_script = config["DATA"]["SCRIPTS"]
+    log:
+        error = f'{log_dir}create_gvcf/{{ID}}/{{prefix}}/{{SM}}.e',
+        output = f'{log_dir}create_gvcf/{{ID}}/{{prefix}}/{{SM}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Bam File re-alignes : {{input.bam_file}}
+                - Bed File : {{input.bed}}
+            Output:
+                - gVCF file : {{output.gvcf}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - python3 {config["DATA"]["SCRIPTS"]}BAM_to_gVCF.py -bam {{input.bam_file}} -bed {{input.bed}} -o {{output.gvcf}} {{params.params_scripts}} 1>{{log.output}} 2>{{log.error}}
+                - echo {{output.gvcf}} >> {{params.list_gvcf}}
+        """
+    envmodules:
+        "python/3.8.2"
+    shell:
+        """
+        (python3 {params.path_to_script}BAM_to_gVCF.py -bam {input.bam_file} -bed {input.bed} -o {output.gvcf} {params.params_scripts}
+        echo {output.gvcf} >> {params.list_gvcf} ) 1>{log.output} 2>>{log.error}
+        """
+
+rule list_gvcf:
+    threads: get_threads("list_gvcf", 1)
+    input:
+        gvcf_pathway = expand(rules.gvcf.output.gvcf, zip , prefix=all_reads.keys(), SM=SM.values(), ID=ID.values())
+    output:
+        list_gvfc = f"{results}5_MERGE_gVCF/gVCF.list"
+    log:
+        error=f'{log_dir}list_gvcf/list_gvcf.e',
+        output=f'{log_dir}list_gvcf/list_gvcf.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - gvfc List file : {rules.gvcf.params.list_gvcf}
+            Output:
+                - Good gVCF list file : {{output.list_gvfc}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - sort {rules.gvcf.params.list_gvcf} > {{output.list_gvfc}} 1>{{log.output}} 2>{{log.error}}
+        """
+    shell:
+        f"sort {rules.gvcf.params.list_gvcf} > {{log.output}} 1>{{output.list_gvfc}} 2>{{log.error}}"
+
+
+rule merge_gvcf:
+    threads: get_threads("merge_gvcf",1)
+    input:
+        list_gVCF = rules.list_gvcf.output.list_gvfc
+    output:
+        merge_gvcf = f"{results}5_MERGE_gVCF/VCF_merged.vcf.gz"
+    params:
+        ref = rules.alignment.params.REF
+    log:
+        error = f'{log_dir}merge_gvcf/merge.e',
+        output = f'{log_dir}merge_gvcf/merge.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - gVCF Files : {{input.list_gVCF}}
+                - Reference : {{params.ref}}
+            Output:
+                - gVCF file : {{output.merge_gvcf}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - bcftools merge --no-index -m all -O z --gvcf {{params.ref}} -l {{input.list_gVCF}} -o {{output.merge_gvcf}}  1>{{log.output}} 2>{{log.error}}
+                - bcftools index {{output.merge_gvcf}}
+        """
+    envmodules:
+        "bcftools/1.17"
+    shell:
+        f"""
+        bcftools merge --no-index -m all -O z --gvcf {{params.ref}} -l {{input.list_gVCF}} -o {{output.merge_gvcf}}  1>{{log.output}} 2>{{log.error}}
+        bcftools index {{output.merge_gvcf}}
+        """
+
+checkpoint split_by_chr:
+    """
+    Split merged VCF file by chromosomes
+    """
+    threads: get_threads("split_by_chr",1)
+    input:
+        vcf_merge = rules.merge_gvcf.output.merge_gvcf
+    output:
+        path_chr = directory(f"{results}6_SPLIT_BY_CHR/")
+    envmodules:
+        "bcftools/1.17"
+    shell:
+        """
+        mkdir -p {output.path_chr}
+        for chr in `bcftools view -h {input.vcf_merge} | perl -ne'; if (/^##contig=<ID=([^,]+)/) {{ print "$1\n" }}'`; do bcftools view -Oz -r $chr {input.vcf_merge} > {output.path_chr}/VCF_${{chr}}.vcf.gz; done
+        """
+
+def get_chr_number(wildcards):
+    ck_output = checkpoints.split_by_chr.get(**wildcards).output[0]
+    chr, = glob_wildcards(os.path.join(ck_output, f"VCF_{{chromosome}}.vcf.gz"))
+    return expand(f"{results}8_HAP_PRES_ABS/VCF_{{chromosome}}.hpa.gz", chromosome = chr)
+
+def info(wildcards):
+    ck_output = checkpoints.split_by_chr.get(**wildcards).output[0]
+    chr, = glob_wildcards(os.path.join(ck_output, f"VCF_{{chr}}.vcf.gz"))
+    return expand(f"{results}8_HAP_PRES_ABS/VCF_{{chr}}_info.txt.gz", chr = chr)
+
+
+rule vcf_filter:
+    threads: get_threads("vcf_filter",1)
+    input:
+        split_chr = rules.split_by_chr.output.path_chr+f"/VCF_{{chromosome}}.vcf.gz",
+    output:
+        gvcf_filter = f"{results}7_VCF_FILTERED/VCF_{{chromosome}}_filt.vcf.gz"
+    params:
+        path_to_script = config["DATA"]["SCRIPTS"],
+        params_vcf_filter = config["TOOLS_PARAMS"]["VCF_FILTER"]
+    log:
+        error=f'{log_dir}vcf_filter/vcf_filter_{{chromosome}}.e',
+        output=f'{log_dir}vcf_filter/vcf_filter_{{chromosome}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Chr splited VCF Files : {{input.split_chr}}
+            Output:
+                - Chr VCF filtered file : {{output.gvcf_filter}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - python3 {{params.path_to_script}}VCF_filter.py -i {{input.split_chr}} -o {{output.gvcf_filter}} {{params.params_vcf_filter}}  1>{{log.output}} 2>{{log.error}}
+                
+        """
+    envmodules:
+        "python/3.8.2"
+    shell:
+        f"python3 {{params.path_to_script}}VCF_filter.py -i {{input.split_chr}} -o {{output.gvcf_filter}} {{params.params_vcf_filter}} 1> {{log.output}} 2> {{log.error}}"
+
+
+rule hap_pres_abs:
+    threads: get_threads("hap_pres_abs",1)
+    input:
+        filtered_vcf= rules.vcf_filter.output.gvcf_filter
+    output:
+        hap_pres_abs_format=f"{results}8_HAP_PRES_ABS/VCF_{{chromosome}}.hpa.gz",
+        info_file = f"{results}8_HAP_PRES_ABS/VCF_{{chromosome}}_info.txt.gz"
+    params:
+        path_to_script=config["DATA"]["SCRIPTS"],
+        params_hap_pres_abs=config["TOOLS_PARAMS"]["HAP_PRES_ABS"],
+        ref= rules.alignment.params.REF,
+        prefix=f"{results}8_HAP_PRES_ABS/VCF_{{chromosome}}.hpa",
+        info = f"{results}8_HAP_PRES_ABS/VCF_{{chromosome}}_info"
+    log:
+        error=f'{log_dir}hap_pres_abs/hap_pres_abs_{{chromosome}}.e',
+        output=f'{log_dir}hap_pres_abs/hap_pres_abs_{{chromosome}}.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Chr VCF filtered Files : {{input.filtered_vcf}}
+            Output:
+                - HapPresAbs format : {{output.hap_pres_abs_format}}
+                - HapPresAbs info : {{output.info_file}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - python3 {{params.path_to_script}}VCF_to_HapPresAbs.py -i {{input.filtered_vcf}} -o {{params.prefix}} --reference {{params.ref}} -v {{params.info}} {{params.params_hap_pres_abs}}  1>{{log.output}} 2>{{log.error}}
+
+        """
+    envmodules:
+        "python/3.8.2"
+    shell:
+        f"python3 {{params.path_to_script}}VCF_to_HapPresAbs.py -i {{input.filtered_vcf}} -o {{params.prefix}} --reference {{params.ref}} -v {{params.info}} {{params.params_hap_pres_abs}}  1>{{log.output}} 2>{{log.error}}"
+
+
+rule report:
+    threads: get_threads("report",1)
+    input:
+        hap_pres_abs = get_chr_number,
+        info_hap = info,
+        stat= expand(f"{results}2_ALIGNMENT/STATS/{{SM}}/{{prefix}}/{{ID}}.sam.stat",zip,prefix=all_reads.keys(),SM=SM.values(),ID=ID.values()),
+        dico_ref_picard= f"{results}1_INDEXATION/REFERENCE/{basename_reference}.dict",
+    output:
+        report=f"{results}report.html"
+    params:
+        path_to_script=config["DATA"]["SCRIPTS"],
+        params_hap_pres_abs=config["TOOLS_PARAMS"]["HAP_PRES_ABS"],
+        ref= rules.alignment.params.REF
+    log:
+        error=f'{log_dir}report/report.e',
+        output=f'{log_dir}report/report.o'
+    message:
+        f"""
+         Running {{rule}}
+            Input:
+                - Sam stat file : {{input.stat}}
+            Output:
+                - HTML report format : {{output.report}}
+            Others:
+                - Threads : {{threads}}
+                - LOG error: {{log.error}}
+                - LOG output: {{log.output}}
+            Commands:
+                - report_stat.rmd  1>{{log.output}} 2>{{log.error}}
+
+        """
+    shell:
+        f" echo {{params.params_hap_pres_abs}} > {{output.report}}  1>{{log.output}} 2>{{log.error}}"
+
+
+
+

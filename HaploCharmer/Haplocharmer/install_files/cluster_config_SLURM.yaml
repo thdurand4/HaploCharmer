@@ -1,7 +1,77 @@
 __default__:
+    cpus-per-task : 1
+    mem-per-cpu : 10G
+    partition : agap_long
+    output : 'slurm_logs/stdout/{rule}/{rule}.o'
+    error : 'slurm_logs/error/{rule}/{rule}.e'
+    job-name : '{rule}.{wildcards}'
+
+indexation:
+    cpus-per-task: 2
+    mem-per-cpu: 20G
+    partition: agap_normal
+
+alignment:
+    cpus-per-task: 6
+    mem-per-cpu: 4G
+    partition: agap_normal
+
+samtools_index:
+    cpus-per-task: 1
+    mem-per-cpu: 4G
+    partition: agap_normal
+
+samstats:
+    cpus-per-task: 1
+    mem-per-cpu: 6G
+    partition: agap_normal
+    
+remove_duplicates:
+    cpus-per-task: 1
+    mem-per-cpu: 20G
+    partition: agap_normal
+
+gatk_interval:
+    cpus-per-task: 6
+    mem-per-cpu: 4G
+    partition: agap_normal
+    
+gatk_alignment:
+    cpus-per-task: 1
+    mem-per-cpu: 30G
+    partition: agap_normal
+
+gvcf:
+    cpus-per-task: 1
+    mem-per-cpu: 3G
+    partition: agap_long
+    
+list_gvcf:
+    cpus-per-task: 1
+    mem-per-cpu: 1G
+    partition: agap_short
+    
+merge_gvcf:
+    cpus-per-task: 6
+    mem-per-cpu: 4G
+    partition: agap_short
+    
+split_by_chr:
+    cpus-per-task: 1
+    mem-per-cpu: 20G
+    partition: agap_short
+    
+vcf_filter:
     cpus-per-task: 1
     mem-per-cpu: 10G
-    partition: PARTITION
-    output: '{log.output}_cluster'
-    error: '{log.error}_cluster'
-    job-name: '{rule}.{wildcards}'
+    partition: agap_long
+    
+hap_pres_abs:
+    cpus-per-task: 1
+    mem-per-cpu: 10G
+    partition: agap_long
+    
+report:
+    cpus-per-task: 1
+    mem-per-cpu: 10G
+    partition: agap_short
