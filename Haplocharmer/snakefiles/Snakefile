@@ -2,12 +2,9 @@ import os
 from pathlib import *
 from collections import defaultdict
 import pandas as pd
-import Haplocharmer
-from Haplocharmer.module import HaploCharmer
 
-haplo_obj = HaploCharmer(Haplocharmer.dico_tool, workflow=workflow, config=config)
-tools_config = haplo_obj.tools_config
-cluster_config = haplo_obj.cluster_config
+
+configfile: "config/config.yaml"
 
 
 reference = config["DATA"]["REFERENCE"]
@@ -19,24 +16,44 @@ all_files = []
 all_samples = {}
 all_reads = {}
 
-
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 # Parsing data reads
 for IDX, line in enumerate(open(list_fastq,"r")):
     if "R1" not in line:
-        NAME = line.strip().split()[4]
-        R1 = line.strip().split()[0]
-        R2 = line.strip().split()[1]
-        PLATEFORM = line.strip().split()[6]
-        SM = line.strip().split()[2]
-        LB = line.strip().split()[3]
-        PU = line.strip().split()[5]
+        try:
+            NAME = line.strip().split()[4]
+            R1 = line.strip().split()[0]
+            R2 = line.strip().split()[1]
+            PLATEFORM = line.strip().split()[6]
+            SM = line.strip().split()[2]
+            LB = line.strip().split()[3]
+            PU = line.strip().split()[5]
+        except IndexError:
+            raise Exception(f"{bcolors.BOLD}{bcolors.FAIL}A field of Information file is empty please make sure to full all of the fields")
+        if ".fastq.gz" not in R1 :
+            raise Exception(f"{bcolors.BOLD}{bcolors.FAIL}Fastq files must have {bcolors.OKGREEN}.fastq.gz {bcolors.FAIL}extension. \n File {bcolors.OKBLUE}{R1} {bcolors.FAIL}got bad extension")
+        if "None" not in R2 and ".fastq.gz" not in R2 :
+            raise Exception(f"{bcolors.BOLD}{bcolors.FAIL}Fastq files must have {bcolors.OKGREEN}.fastq.gz {bcolors.FAIL}extension. \n File {bcolors.OKBLUE}{R2} {bcolors.FAIL}got bad extension.\n {bcolors.WARNING}However if reads are not paired write None in the R2 fields{bcolors.FAIL}")
+        if "_R1" not in R1 and "_P1" not in R1 :
+            raise Exception(f"{bcolors.BOLD}{bcolors.FAIL}Fastq files must have paired prefix like that : {bcolors.OKGREEN}_R1.fastq.gz or _P1.fastq.gz.\n {bcolors.FAIL}File {bcolors.OKBLUE}{R1} {bcolors.FAIL}got bad prefix")
+        if "None" not in R2 and "_R2" not in R2 and "_P2" not in R2 :
+            raise Exception(f"{bcolors.BOLD}{bcolors.FAIL}Fastq files must have paired prefix like that : {bcolors.OKGREEN}_R2.fastq.gz or _P2.fastq.gz.\n {bcolors.FAIL}File {bcolors.OKBLUE}{R2} {bcolors.FAIL}got bad prefix.\n {bcolors.WARNING}However if reads are not paired write None in the R2 fields{bcolors.FAIL}")
         if not PLATEFORM in ["ILLUMINA", "SOLID", "LS454", "HELICOS", "PACBIO"]:
             raise Exception(PLATEFORM + " is not a valid sequencer type\n")
 
         all_files.append(os.path.basename(R1).replace('.gz','').replace('.fastq',''))
-        prefix = os.path.basename(R1).replace('.fastq.gz','').replace('.fq.gz','').replace('_R1','').replace('.R1','').replace('.R','').replace('_P1','').replace('.P1','')
+        prefix = os.path.basename(R1).replace('.fastq.gz','').replace('_R1','').replace('_P1','')
         all_reads[prefix] = {"idx": IDX, "name": NAME, "reads": [R1], "plateform": PLATEFORM, "sm" : SM, "lb" : LB, "pu" : PU}
 
         if not "None" in R2:
@@ -109,9 +126,9 @@ rule indexation :
 
             """
     envmodules:
-        tools_config["ENVMODULE"]["PICARD"],
-        tools_config["ENVMODULE"]["SAMTOOLS"],
-        tools_config["ENVMODULE"]["BWA"]
+        "picard-tools/2.24.0-conda",
+        "samtools/1.2-bin",
+        "bwa/0.7.17"
     shell:
         """
         (cp {input.reference_fasta} {params.new_ref}
@@ -157,8 +174,8 @@ rule alignment:
                        samtools sort -@ {{threads}} -o {{output.bam_file}}) 
             """
     envmodules:
-        tools_config["ENVMODULE"]["SAMTOOLS"],
-        tools_config["ENVMODULE"]["BWA"]
+        "bwa/0.7.17",
+        "samtools/1.14-bin"
     shell:
         """
         (bwa mem -t {threads} -M {params.REF} -R '@RG\\tSM:{params.SM}\\tLB:{params.LB}\\tID:{params.ID}\\tPU:{params.PU}\\tPL:{params.PLATEFORM}' {input.fastq} |
@@ -192,7 +209,7 @@ rule samtools_index:
                     - samtools index -@ {{threads}} {{input.bam}} 1>{{log.output}} 2>{{log.error}}
             """
     envmodules:
-        tools_config["ENVMODULE"]["SAMTOOLS"]
+        "samtools/1.14-bin"
     shell:
             """
                 samtools index -@ {threads} {input.bam} 1>{log.output} 2>{log.error}
@@ -227,7 +244,7 @@ rule samstats:
                     - samtools stats {{input.bam_file}} > {{output.stats_file}}                 
             """
     envmodules:
-        tools_config["ENVMODULE"]["SAMTOOLS"]
+        "samtools/1.14-bin"
     shell:
         f"samtools stats {{input.bam_file}} > {{log.output}} 1>{{output.stats_file}} 2>{{log.error}}"
 
@@ -264,7 +281,7 @@ rule remove_duplicates:
                 - picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        tools_config["ENVMODULE"]["PICARD"]
+        "picard-tools/2.24.0"
     shell:
         f"picard MarkDuplicates INPUT={{input.bam_file}} OUTPUT={{output.rmdup_bam}} METRICS_FILE={{params.metrics}} REMOVE_DUPLICATES=true QUIET=true CREATE_INDEX=true 1>{{log.output}} 2>{{log.error}}"
 
@@ -279,8 +296,7 @@ rule gatk_interval:
     params:
         SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
         ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
-        ref= rules.alignment.params.REF,
-        gatk = tools_config["DOWNLOAD_PATH"]["GATK_3_6"]
+        ref= rules.alignment.params.REF
     log:
         error = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.e',
         output = f'{log_dir}realignment_interval/{{SM}}/{{prefix}}/{{ID}}.o'
@@ -300,9 +316,9 @@ rule gatk_interval:
                 - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        tools_config["ENVMODULE"]["JAVA"]
+        "jre/jre.8_x64"
     shell:
-        f"java -jar -Xmx30G {{params.gatk}} -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}"
+        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T RealignerTargetCreator -R {{params.ref}} -I {{input.bam_file}} -o {{output.align_interval}} 1>{{log.output}} 2>{{log.error}}"
 
 
 rule gatk_alignment:
@@ -316,8 +332,7 @@ rule gatk_alignment:
     params:
         SM = lambda wildcards: all_reads[wildcards.prefix]["sm"],
         ID= lambda wildcards: all_reads[wildcards.prefix]["name"],
-        ref= rules.alignment.params.REF,
-        gatk= tools_config["DOWNLOAD_PATH"]["GATK_3_6"]
+        ref= rules.alignment.params.REF
     log:
         error = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.e',
         output = f'{log_dir}realignment_gatk/{{SM}}/{{prefix}}/{{ID}}.o'
@@ -338,9 +353,9 @@ rule gatk_alignment:
                 - java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}
         """
     envmodules:
-        tools_config["ENVMODULE"]["JAVA"]
+        "jre/jre.8_x64"
     shell:
-        f"java -jar -Xmx30G {{params.gatk}} -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}"
+        f"java -jar -Xmx30G /nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar -T IndelRealigner -R {{params.ref}} -I {{input.bam_file}} -o {{output.realigned_bam}} -targetIntervals {{input.interval_list}} 1>{{log.output}} 2>{{log.error}}"
 
 rule gvcf:
     threads: get_threads("gvcf",1)
@@ -376,7 +391,7 @@ rule gvcf:
                 - echo {{output.gvcf}} >> {{params.list_gvcf}}
         """
     envmodules:
-        tools_config["ENVMODULE"]["PYTHON"]
+        "python/3.8.2"
     shell:
         """
         (python3 {params.path_to_script}BAM_to_gVCF.py -bam {input.bam_file} -bed {input.bed} -o {output.gvcf} {params.params_scripts}
@@ -438,7 +453,7 @@ rule merge_gvcf:
                 - bcftools index {{output.merge_gvcf}}
         """
     envmodules:
-        tools_config["ENVMODULE"]["BCFTOOLS"]
+        "bcftools/1.17"
     shell:
         f"""
         bcftools merge --no-index -m all -O z --gvcf {{params.ref}} -l {{input.list_gVCF}} -o {{output.merge_gvcf}}  1>{{log.output}} 2>{{log.error}}
@@ -455,7 +470,7 @@ checkpoint split_by_chr:
     output:
         path_chr = directory(f"{results}6_SPLIT_BY_CHR/")
     envmodules:
-        tools_config["ENVMODULE"]["BCFTOOLS"]
+        "bcftools/1.17"
     shell:
         """
         mkdir -p {output.path_chr}
@@ -501,7 +516,7 @@ rule vcf_filter:
                 
         """
     envmodules:
-        tools_config["ENVMODULE"]["PYTHON"]
+        "python/3.8.2"
     shell:
         f"python3 {{params.path_to_script}}VCF_filter.py -i {{input.split_chr}} -o {{output.gvcf_filter}} {{params.params_vcf_filter}} 1> {{log.output}} 2> {{log.error}}"
 
@@ -539,7 +554,7 @@ rule hap_pres_abs:
 
         """
     envmodules:
-        tools_config["ENVMODULE"]["PYTHON"]
+        "python/3.8.2"
     shell:
         f"python3 {{params.path_to_script}}VCF_to_HapPresAbs.py -i {{input.filtered_vcf}} -o {{params.prefix}} --reference {{params.ref}} -v {{params.info}} {{params.params_hap_pres_abs}}  1>{{log.output}} 2>{{log.error}}"
 
@@ -577,7 +592,3 @@ rule report:
         """
     shell:
         f" echo {{params.params_hap_pres_abs}} > {{output.report}}  1>{{log.output}} 2>{{log.error}}"
-
-
-
-
