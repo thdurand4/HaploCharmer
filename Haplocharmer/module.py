@@ -5,8 +5,21 @@ from pathlib import Path
 from snakemake.logging import logger
 from snakemake.utils import validate
 import re
+import os.path
 from .global_variables import *
 from snakecdysis import *
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 
 
 class HaploCharmer(SnakEcdysis):
@@ -32,14 +45,39 @@ class HaploCharmer(SnakEcdysis):
     def __check_config_dic(self):
         """Configuration file checking"""
         self.__get_tools_config("ENVMODULE")
-
+	
         self.tools_activated = self.__build_tools_activated("OPTIONAL", ("REMOVE_DUPLICATES"), True)
         
-        self._check_dir_or_string(level1="DATA", level2="REFERENCE")
         self._check_dir_or_string(level1="DATA", level2="OUTPUT")
         self._check_dir_or_string(level1="DATA", level2="SCRIPTS")
-        self._check_dir_or_string(level1="DATA", level2="BEDFILE")
-        self._check_dir_or_string(level1="DATA", level2="INFORMATION_FILE")
+        
+        if (os.path.isfile(self.get_config_value(level1='DATA', level2='REFERENCE'))):
+            pass
+        else:
+            raise ValueError(f"{bcolors.BOLD}{bcolors.FAIL}File {bcolors.OKBLUE}{self.get_config_value(level1='DATA', level2='REFERENCE')} {bcolors.FAIL}doesn't exist")
+        
+        if (os.path.isfile(self.get_config_value(level1='DATA', level2='BEDFILE'))):
+            pass
+        else:
+            raise ValueError(f"{bcolors.BOLD}{bcolors.FAIL}File {bcolors.OKBLUE}{self.get_config_value(level1='DATA', level2='BEDFILE')} {bcolors.FAIL}doesn't exist")
+        
+        if (os.path.isfile(self.get_config_value(level1='DATA', level2='INFORMATION_FILE'))):
+            pass
+        else:
+            raise ValueError(f"{bcolors.BOLD}{bcolors.FAIL}File {bcolors.OKBLUE}{self.get_config_value(level1='DATA', level2='INFORMATION_FILE')} {bcolors.FAIL}doesn't exist")
+        
+        def chek_info_file(self, path):
+            # check of header
+            infile = open(path, 'r')
+            if not 'R1\tR2\tSM\tLB\tID\tPU\tPLATFORM' in infile.readline():
+                raise ValueError(
+                    f"{bcolors.BOLD}{bcolors.FAIL}INFORMATION FILE CHECKING FAIL : Please add {bcolors.OKGREEN}R1\tR2\tSM\tLB\tID\tPU\tPLATFORM {bcolors.BOLD}{bcolors.FAIL}in INFORMATION FILE tabulated header !")
+            infile.close()
+        
+        self.info = chek_info_file(self, self.get_config_value(level1='DATA', level2='INFORMATION_FILE'))
+        
+        
+
 
     def __check_tools_config(self, tool, mandatory=[]):
         """Check if path is a file if not empty
@@ -50,13 +88,13 @@ class HaploCharmer(SnakEcdysis):
             envmodule_key = self.tools_config["ENVMODULE"][tool]
             if not envmodule_key:
                 raise ValueError(
-                    f'CONFIG FILE CHECKING FAIL : please check tools_config.yaml in the "ENVMODULE" section, {tool} is empty')
+                    f'{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : please check {bcolors.OKGREEN}tools_config.yaml {bcolors.BOLD}{bcolors.FAIL}in the {bcolors.OKGREEN}"ENVMODULE" {bcolors.BOLD}{bcolors.FAIL}section, {bcolors.OKBLUE}{tool} {bcolors.BOLD}{bcolors.FAIL}is empty')
         
 
         # If envmodule and singularity
         if self.use_env_modules and self.use_singularity:
             raise ValueError(
-                f"CONFIG FILE CHECKING FAIL : Use env-module or singularity but don't mix them")
+                f"{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : Use env-module or singularity but don't mix them")
 
     
     def __get_tools_config(self, key):
@@ -74,7 +112,7 @@ class HaploCharmer(SnakEcdysis):
                     tools_activate.append(tool)
                     self.config[key][tool] = boolean_activated
             else:
-                raise ValueError(f'CONFIG FILE CHECKING FAIL : {key} {tool} not allowed on HaploCharmer"')
+                raise ValueError(f'{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : {bcolors.OKBLUE}{key} {tool} {bcolors.BOLD}{bcolors.FAIL}not allowed on HaploCharmer"')
         return tools_activate
 
 
@@ -88,4 +126,4 @@ class HaploCharmer(SnakEcdysis):
             return False
         else:
             raise TypeError(
-                f'CONFIG FILE CHECKING FAIL : in the "{key}" section, "{tool}" key: "{to_convert}" is not a valid boolean')
+                f'{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : in the "{bcolors.OKBLUE}{key}{bcolors.BOLD}{bcolors.FAIL}" section, "{bcolors.OKGREEN}{tool}{bcolors.BOLD}{bcolors.FAIL}" key: "{bcolors.OKBLUE}{to_convert}{bcolors.BOLD}{bcolors.FAIL}" is not a valid boolean')
