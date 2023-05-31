@@ -31,8 +31,10 @@ class HaploCharmer(SnakEcdysis):
         
     def __check_config_dic(self):
         """Configuration file checking"""
+        self.__get_tools_config("ENVMODULE")
 
         self.tools_activated = self.__build_tools_activated("OPTIONAL", ("REMOVE_DUPLICATES"), True)
+        
         self._check_dir_or_string(level1="DATA", level2="REFERENCE")
         self._check_dir_or_string(level1="DATA", level2="OUTPUT")
         self._check_dir_or_string(level1="DATA", level2="SCRIPTS")
@@ -42,25 +44,25 @@ class HaploCharmer(SnakEcdysis):
     def __check_tools_config(self, tool, mandatory=[]):
         """Check if path is a file if not empty
         :return absolute path file"""
-        tool_OK = True
-
+    
         # If only envmodule
         if self.use_env_modules and not self.use_singularity:
             envmodule_key = self.tools_config["ENVMODULE"][tool]
             if not envmodule_key:
                 raise ValueError(
                     f'CONFIG FILE CHECKING FAIL : please check tools_config.yaml in the "ENVMODULE" section, {tool} is empty')
-            tool_OK = True
+        
 
         # If envmodule and singularity
         if self.use_env_modules and self.use_singularity:
             raise ValueError(
                 f"CONFIG FILE CHECKING FAIL : Use env-module or singularity but don't mix them")
 
-        if len(mandatory) > 0 and not tool_OK:
-            raise FileNotFoundError(
-                f'CONFIG FILE CHECKING FAIL : please check tools_config.yaml in the  {tool} params, please append Singularity or module load, is mandatory for tool: {" ".join(mandatory)}')
     
+    def __get_tools_config(self, key):
+    	for tool, activated in self.tools_config[key].items():
+    	    if tool != "None":
+       	    	self.__check_tools_config(tool, [tool])
     
     
     def __build_tools_activated(self, key, allow, mandatory=False):
@@ -71,11 +73,8 @@ class HaploCharmer(SnakEcdysis):
                 if boolean_activated:
                     tools_activate.append(tool)
                     self.config[key][tool] = boolean_activated
-                    self.__check_tools_config(tool, [tool])
             else:
                 raise ValueError(f'CONFIG FILE CHECKING FAIL : {key} {tool} not allowed on HaploCharmer"')
-        if len(tools_activate) == 0 and mandatory:
-            raise ValueError(f"CONFIG FILE CHECKING FAIL : you need to set True for at least one {key} from {allow}")
         return tools_activate
 
 
@@ -90,4 +89,3 @@ class HaploCharmer(SnakEcdysis):
         else:
             raise TypeError(
                 f'CONFIG FILE CHECKING FAIL : in the "{key}" section, "{tool}" key: "{to_convert}" is not a valid boolean')
-
