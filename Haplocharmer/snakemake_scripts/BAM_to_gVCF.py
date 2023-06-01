@@ -69,9 +69,13 @@ def process_checks(args):
         os.makedirs(output_dir, exist_ok=True)
     # Remove vcf ang gz extensions from output if any
     output_name, output_extension = os.path.splitext(args.output)
-    while output_extension == ".gvcf" or output_extension == ".g" or \
-            output_extension == ".vcf" or output_extension == ".gz":
-        output_name, output_extension = os.path.splitext(output_name)
+    if output_extension != ".gvcf" or output_extension != ".g" or \
+            output_extension != ".vcf" or output_extension != ".gz":
+        output_name=args.output
+    else:
+        while output_extension == ".gvcf" or output_extension == ".g" or \
+                output_extension == ".vcf" or output_extension == ".gz":
+            output_name, output_extension = os.path.splitext(output_name)
     # Test for alignment file type
     if args.input_bam.endswith(".bam"):
         alignment_file_mode = "rb"
@@ -92,6 +96,7 @@ def process_checks(args):
         gvcf_read_mode = "r"
     # Return
     return output_name, alignment_file_mode, gvcf_write_mode, gvcf_read_mode, gvcf_suffix
+
 
 # Function to get unique elements from a list
 def unique(list1):
