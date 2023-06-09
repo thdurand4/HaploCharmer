@@ -145,6 +145,7 @@ def get_ps_sizes(input_file):
     # Create an empty dictionary
     ps_size_dict = {}
     # Loop over vcf file
+    input_file.seek(0)
     for line in input_file:
         # test if metadata or header
         if not line.startswith('#'):
@@ -180,10 +181,9 @@ def generate_hpa_by_ps(args, ps_sizes, hpa_colnames, output_name, output_suffix,
     # Get reference sequence
     reference = Fasta(args.reference, mutable=False)
     # Iterate through phasing sets
-    ps_incr = 1
     for ps_key, ps_value in ps_sizes.items():
         # Get chunk of VCF corresponding to the phasing set
-        ps_vcf = (vcf_reader.get_chunk(ps_value + ps_incr))
+        ps_vcf = (vcf_reader.get_chunk(ps_value))
         ps_incr = 0
         # Set column names
         ps_vcf.columns = ['#CHROM', 'POS', "ID", 'REF', "ALT", "QUAL", "FILTER", "INFO", "FORMAT"] + hpa_colnames[6:]
