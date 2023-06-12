@@ -40,13 +40,13 @@ class HaploCharmer(SnakEcdysis):
         
         self.__check_config_dic()
         
-        self.write_config(f"{self.config['DATA']['OUTPUT']}/config_corrected.yaml")
+        #self.write_config(self.config)
         
     def __check_config_dic(self):
         """Configuration file checking"""
         self.__get_tools_config("ENVMODULE")
-	
-        self.tools_activated = self.__build_tools_activated("OPTIONAL", ("REMOVE_DUPLICATES"), True)
+       
+        #self.tools_activated = self.__build_tools_activated("OPTIONAL", ("REMOVE_DUPLICATES"), True)
         
         self._check_dir_or_string(level1="DATA", level2="OUTPUT")
         self._check_dir_or_string(level1="DATA", level2="SCRIPTS")
@@ -65,6 +65,10 @@ class HaploCharmer(SnakEcdysis):
             pass
         else:
             raise ValueError(f"{bcolors.BOLD}{bcolors.FAIL}File {bcolors.OKBLUE}{self.get_config_value(level1='DATA', level2='INFORMATION_FILE')} {bcolors.FAIL}doesn't exist")
+        if (self.get_config_value(level1='OPTIONAL', level2='REMOVE_DUPLICATES') == True or self.get_config_value(level1='OPTIONAL', level2='REMOVE_DUPLICATES') == False):
+            pass
+        else:
+            raise ValueError(f"{bcolors.BOLD}{bcolors.FAIL}ERROR {bcolors.OKBLUE}{self.get_config_value(level1='OPTIONAL', level2='REMOVE_DUPLICATES')} {bcolors.FAIL}is not allowed. Please make sure to write : {bcolors.OKGREEN}True {bcolors.FAIL}or {bcolors.OKGREEN}False {bcolors.FAIL}in {bcolors.OKGREEN}REMOVE_DUPLICATES {bcolors.FAIL}section")
         
         def chek_info_file(self, path):
             # check of header
@@ -103,27 +107,3 @@ class HaploCharmer(SnakEcdysis):
        	    	self.__check_tools_config(tool, [tool])
     
     
-    def __build_tools_activated(self, key, allow, mandatory=False):
-        tools_activate = []
-        for tool, activated in self.config[key].items():
-            if tool in allow:
-                boolean_activated = var_2_bool(key, tool, activated)
-                if boolean_activated:
-                    tools_activate.append(tool)
-                    self.config[key][tool] = boolean_activated
-            else:
-                raise ValueError(f'{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : {bcolors.OKBLUE}{key} {tool} {bcolors.BOLD}{bcolors.FAIL}not allowed on HaploCharmer"')
-        return tools_activate
-
-
-    def __var_2_bool(self, key, tool, to_convert):
-        """convert to boolean"""
-        if isinstance(type(to_convert), bool):
-            return to_convert
-        elif f"{to_convert}".lower() in ("yes", "true", "t"):
-            return True
-        elif f"{to_convert}".lower() in ("no", "false", "f"):
-            return False
-        else:
-            raise TypeError(
-                f'{bcolors.BOLD}{bcolors.FAIL}CONFIG FILE CHECKING FAIL : in the "{bcolors.OKBLUE}{key}{bcolors.BOLD}{bcolors.FAIL}" section, "{bcolors.OKGREEN}{tool}{bcolors.BOLD}{bcolors.FAIL}" key: "{bcolors.OKBLUE}{to_convert}{bcolors.BOLD}{bcolors.FAIL}" is not a valid boolean')
