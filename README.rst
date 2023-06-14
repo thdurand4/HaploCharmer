@@ -47,10 +47,10 @@ Licencied under `CeCill-C <http://www.cecill.info/licences/Licence_CeCILL-C_V1-e
 
 Intellectual property belongs to CIRAD and authors.
 
-.. |PythonVersions| image:: https://img.shields.io/badge/python-3.7%2B-blue
+.. |PythonVersions| image:: https://img.shields.io/badge/python-3.8.2%2B-blue
    :target: https://www.python.org/downloads
-.. |SnakemakeVersions| image:: https://img.shields.io/badge/snakemake-≥5.10.0-brightgreen.svg?style=flat
+.. |SnakemakeVersions| image:: https://img.shields.io/badge/snakemake-≥7.15.1-brightgreen.svg?style=flat
    :target: https://snakemake.readthedocs.io
 .. |readthedocs| image:: https://pbs.twimg.com/media/E5oBxcRXoAEBSp1.png
-   :target: https://podiumasm.readthedocs.io/en/latest
+   :target: https://haplocharmer.readthedocs.io/en/latest
    :width: 400px
