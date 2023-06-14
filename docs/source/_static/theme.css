@@ -1,0 +1,27 @@
+ /* Logo
+==================================================== */
+
+.wy-side-nav-search {
+    background-color: #81cdff;
+}
+
+.wy-side-nav-search .wy-dropdown > a img.logo, .wy-side-nav-search > a img.logo {
+	display: block;
+	margin: 0 auto;
+	height: auto;
+	width: auto;
+	border-radius: 0;
+	max-width: 60%;
+	background: transparent;
+}
+/* version size */
+.wy-side-nav-search > div.version {
+	font-weight: 600;
+	color: hsl(211, 100%, 49%);
+}
+/* text justify */
+.wy-nav-content {
+	margin: 0;
+	background: #fcfcfc;
+	text-align: justify;
+}
