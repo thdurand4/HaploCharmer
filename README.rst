@@ -1,6 +1,6 @@
 .. raw:: html
 
-   <img src="https://raw.githubusercontent.com/thdurand4/PodiumASM/main/docs/source/_images/PodiumASM_logo.png" align="right" alt="podiumASM Logo">
+   <img src="https://raw.githubusercontent.com/thdurand4/HaploCharmer/main/docs/source/_images/HaploCharmer_logo.png" align="right" alt="podiumASM Logo">
 
 
 |PythonVersions| |SnakemakeVersions| 
@@ -14,7 +14,7 @@ About podiumASM
 
 |readthedocs|
 
-**Homepage:** `https://podiumasm.readthedocs.io/en/latest/ <https://podiumasm.readthedocs.io/en/latest/>`_
+**Homepage:** `https://haplocharmer.readthedocs.io/en/latest/ <https://haplocharmer.readthedocs.io/en/latest/>`_
 
 
 Long-read sequencing is a highly accurate approach that can be used to
@@ -31,7 +31,7 @@ your organism.
 Citation
 ________
 
-https://github.com/thdurand4/PodiumASM/
+https://github.com/thdurand4/HaploCharmer/
 
 
 Authors
