@@ -20,6 +20,6 @@ ENVMODULE:
 
 # Give Path of GATK 3.6 INSTALL REQUIRED !!!!
 DOWNLOAD_PATH:
-    GATK_3_6 : "/nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar"
+    GATK_3_6 : "/nfs/work/agap_id-bin/img/GATK/3.6/GATK.jar" #IF SINGULARITY USE PLEASE TYPE : java -jar /opt/GenomeAnalysisTK.jar
     
 
