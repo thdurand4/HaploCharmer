@@ -19,7 +19,7 @@ description = "HaploCharmer is a Snakemake pipeline for small haplotypes calling
 authors = [
     {name = "Durand Théo (CIRAD)",email = "theo.durand@cirad.fr"},
 ]
-dependencies = ["PyYAML", "click>=8.0.3", "cookiecutter", "docutils", "python-gitlab", "snakemake", "tqdm"]
+dependencies = ["PyYAML", "click>=8.0.3", "cookiecutter", "docutils", "python-gitlab", "snakemake", "tqdm", "snakecdysis"]
 requires-python = ">=3.8"
 readme = "README.rst"
 license = {file = "LICENSE"}
