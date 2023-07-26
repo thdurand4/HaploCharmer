@@ -1,6 +1,6 @@
 .. raw:: html
 
-   <img src="https://raw.githubusercontent.com/thdurand4/HaploCharmer/main/docs/source/_images/HaploCharmer_logo.png" align="right" alt="Haplocharmer Logo">
+   <img src="https://raw.githubusercontent.com/thdurand4/HaploCharmer/main/docs/source/_images/HaploCharmer_logo.png" width="30%" align="right" alt="Haplocharmer Logo">
 
 
 |PythonVersions| |SnakemakeVersions| 
